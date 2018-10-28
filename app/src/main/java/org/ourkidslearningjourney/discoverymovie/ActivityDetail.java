@@ -1,19 +1,19 @@
 package org.ourkidslearningjourney.discoverymovie;
 
-import android.content.Context;
+import android.arch.lifecycle.LiveData;
+import android.arch.lifecycle.Observer;
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -53,10 +53,14 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
     private ArrayList<MovieReview> mReviewInfos;
     private ArrayList<MovieTrailer> mTrailerInfos;
 
+    private MovieDatabase mMovieDB;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_detail);
+
+        mMovieDB = MovieDatabase.getInstance(getApplicationContext());
 
         mReviewList = (RecyclerView) findViewById(R.id.rv_displayreviews);
         mTrailerList = (RecyclerView) findViewById(R.id.rv_displaytrailers);
@@ -77,29 +81,23 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
         btnMovieAddToFavorite.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                int size = ActivityMain.mFavoriteMovieInfos.size();
-
-                if (size == 0) {
-                    ActivityMain.mFavoriteMovieInfos.add(mDetailedMovieInfo);
-
-                    Toast.makeText(
-                            getApplicationContext(),
-                            "Successfully ADDED to your FAVORITE Movie List",
-                            Toast.LENGTH_LONG).show();
-                } else {
-                    for (int i=0; i<size; i++) {
-                        if (mDetailedMovieInfo.getMovieId() != ActivityMain.mFavoriteMovieInfos.get(i).getMovieId()) {
-                            if (i == (size - 1)) {
-                                ActivityMain.mFavoriteMovieInfos.add(mDetailedMovieInfo);
-
+                MovieExecutors.getsInstance().diskIO().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        mMovieDB.movieDAO().insertMovie(mDetailedMovieInfo);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                btnMovieAddToFavorite.setAlpha(0.2f);
+                                btnMovieAddToFavorite.setEnabled(false);
                                 Toast.makeText(
                                         getApplicationContext(),
                                         "Successfully ADDED to your FAVORITE Movie List",
                                         Toast.LENGTH_LONG).show();
                             }
-                        }
+                        });
                     }
-                }
+                });
             }
         });
 
@@ -111,6 +109,23 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
 
         if (intentDetailedMovie.hasExtra(ActivityMain.SELECTED_MOVIE_DETAIL)) {
             mDetailedMovieInfo = (MovieInfo) intentDetailedMovie.getSerializableExtra(ActivityMain.SELECTED_MOVIE_DETAIL);
+
+            MovieLoadViewModelFactory factory = new MovieLoadViewModelFactory(mMovieDB, mDetailedMovieInfo.getMovieId());
+            final MovieLoadViewModel viewModel = ViewModelProviders.of(this, factory).get(MovieLoadViewModel.class);
+            viewModel.getMovie().observe(this, new Observer<MovieInfo>() {
+                @Override
+                public void onChanged(@Nullable MovieInfo movieInfo) {
+                    viewModel.getMovie().removeObserver(this);
+
+                    if (movieInfo == null) {
+                        btnMovieAddToFavorite.setEnabled(true);
+                        btnMovieAddToFavorite.setAlpha(1f);
+                    } else {
+                        btnMovieAddToFavorite.setEnabled(false);
+                        btnMovieAddToFavorite.setAlpha(0.2f);
+                    }
+                }
+            });
 
             if (ActivityMain.getNetworkStatus(this)) {
                 String urlToLoad =

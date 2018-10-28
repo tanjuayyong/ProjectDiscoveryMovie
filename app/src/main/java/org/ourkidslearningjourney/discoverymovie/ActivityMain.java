@@ -1,14 +1,18 @@
 package org.ourkidslearningjourney.discoverymovie;
 
+import android.arch.lifecycle.Observer;
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -19,19 +23,22 @@ import org.json.JSONException;
 
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class ActivityMain extends AppCompatActivity implements AdapterMovie.MovieAdapterOnClickHandler {
+    private static final String TAG = ActivityMain.class.getSimpleName();
     public static final String SELECTED_MOVIE_DETAIL = "MOVIE_DETAIL";
 
     private AdapterMovie mMovieAdapter;
     private RecyclerView mMovieList;
     private ProgressBar mLoadingIndicator;
 
+    private MovieDatabase mMovieDB;
     private FetchMovieTask mLoadMovie;
-
     private ArrayList<MovieInfo> mMovieInfos;
 
-    public static ArrayList<MovieInfo> mFavoriteMovieInfos = new ArrayList<MovieInfo>();
+    public static ArrayList<MovieInfo> mFavoriteMovieInfos;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +62,8 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
                     "No Network Connectivity!\nUnable to get Movie Information",
                     Toast.LENGTH_LONG).show();
         }
+
+        mMovieDB = MovieDatabase.getInstance(getApplicationContext());
     }
 
     @Override
@@ -82,19 +91,7 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
                     mLoadMovie.execute(urlToLoad);
                     return true;
                 case R.id.action_sort_favorite:
-                    if (mFavoriteMovieInfos.size() == 0) {
-                        Toast.makeText(
-                                getApplicationContext(),
-                                "You have NOT added any FAVORITE yet",
-                                Toast.LENGTH_LONG).show();
-                    } else {
-                        mMovieList.setHasFixedSize(true);
-                        mMovieAdapter = new AdapterMovie(
-                                ActivityMain.this,
-                                mFavoriteMovieInfos.size(),
-                                mFavoriteMovieInfos);
-                        mMovieList.setAdapter(mMovieAdapter);
-                    }
+                    setupViewModel();
                     return true;
             }
         }
@@ -119,6 +116,33 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
         boolean gotNetwork = currentNetworkInfo != null && currentNetworkInfo.isConnected();
 
         return gotNetwork;
+    }
+
+
+    private void setupViewModel() {
+        MovieViewModel viewModel = ViewModelProviders.of(this).get(MovieViewModel.class);
+
+        viewModel.getMovies().observe(this, new Observer<List<MovieInfo>>() {
+            @Override
+            public void onChanged(@Nullable List<MovieInfo> movieInfos) {
+                Log.d(TAG, "Updating list of tasks from LiveData in ViewModel");
+
+                mFavoriteMovieInfos = new ArrayList<MovieInfo>(movieInfos);
+                if (mFavoriteMovieInfos.size() == 0) {
+                    Toast.makeText(
+                            getApplicationContext(),
+                            "You have NOT added any FAVORITE yet",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    mMovieList.setHasFixedSize(true);
+                    mMovieAdapter = new AdapterMovie(
+                            ActivityMain.this,
+                            mFavoriteMovieInfos.size(),
+                            mFavoriteMovieInfos);
+                    mMovieList.setAdapter(mMovieAdapter);
+                }
+            }
+        });
     }
 
 
