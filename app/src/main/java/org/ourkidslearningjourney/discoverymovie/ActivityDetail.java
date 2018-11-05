@@ -11,6 +11,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -24,8 +25,13 @@ import org.json.JSONException;
 
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.List;
 
 public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.TrailerAdapterOnClickHandler {
+    private static final String TAG_ERROR = "DetailActivity";
+    private static final String TAG_ADD = "Add";
+    private static final String TAG_DEL = "Del";
+
     private TextView lblMovieTitle;
     private TextView lblMovieReleaseDate;
     private TextView lblMovieAdultRating;
@@ -48,10 +54,10 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
     private FetchReviewTask mLoadReview;
     private FetchTrailerTask mLoadTrailer;
 
-    MovieInfo mDetailedMovieInfo;
-
     private ArrayList<MovieReview> mReviewInfos;
     private ArrayList<MovieTrailer> mTrailerInfos;
+
+    private MovieInfo mDetailedMovieInfo;
 
     private MovieDatabase mMovieDB;
 
@@ -81,23 +87,7 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
         btnMovieAddToFavorite.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                MovieExecutors.getsInstance().diskIO().execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        mMovieDB.movieDAO().insertMovie(mDetailedMovieInfo);
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                btnMovieAddToFavorite.setAlpha(0.2f);
-                                btnMovieAddToFavorite.setEnabled(false);
-                                Toast.makeText(
-                                        getApplicationContext(),
-                                        "Successfully ADDED to your FAVORITE Movie List",
-                                        Toast.LENGTH_LONG).show();
-                            }
-                        });
-                    }
-                });
+                onSaveOrRemoveFavoriteButtonClicked();
             }
         });
 
@@ -115,21 +105,23 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
             viewModel.getMovie().observe(this, new Observer<MovieInfo>() {
                 @Override
                 public void onChanged(@Nullable MovieInfo movieInfo) {
-                    viewModel.getMovie().removeObserver(this);
-
                     if (movieInfo == null) {
-                        btnMovieAddToFavorite.setEnabled(true);
-                        btnMovieAddToFavorite.setAlpha(1f);
+                        btnMovieAddToFavorite.setText(getString(R.string.addfavorite));
+                        btnMovieAddToFavorite.setTag(TAG_ADD);
                     } else {
-                        btnMovieAddToFavorite.setEnabled(false);
-                        btnMovieAddToFavorite.setAlpha(0.2f);
+                        mDetailedMovieInfo = movieInfo;
+
+                        btnMovieAddToFavorite.setText(getString(R.string.delfavorite));
+                        btnMovieAddToFavorite.setTag(TAG_DEL);
                     }
+
+                    Log.d(TAG_ERROR, "ViewModel Observe in DetailedActivity - onChanged");
+                    viewModel.getMovie().removeObserver(this);
                 }
             });
 
             if (ActivityMain.getNetworkStatus(this)) {
-                String urlToLoad =
-                        UtilsNetwork.MOVIEAPI_START_REQUEST +
+                String urlToLoad = UtilsNetwork.MOVIEAPI_START_REQUEST +
                         mDetailedMovieInfo.getMovieId() +
                         UtilsNetwork.MOVIEAPI_MID_REVIEWREQUEST +
                         UtilsNetwork.MOVIEDB_APIKEY +
@@ -155,6 +147,24 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
         }
     }
 
+    public void onSaveOrRemoveFavoriteButtonClicked() {
+        final String type = btnMovieAddToFavorite.getTag().toString();
+
+        MovieExecutors.getsInstance().diskIO().execute(new Runnable() {
+            @Override
+            public void run() {
+                if (type.equals(TAG_ADD)) {
+                    Log.d(TAG_ERROR, "Loaded MovieExecutors in DetailedActivity - InsertMovie");
+                    mMovieDB.movieDAO().insertMovie(mDetailedMovieInfo);
+                } else {
+                    Log.d(TAG_ERROR, "Loaded MovieExecutors in DetailedActivity - DeleteMovie");
+                    mMovieDB.movieDAO().deleteMovie(mDetailedMovieInfo);
+                }
+                finish();
+            }
+        });
+    }
+
     public class FetchTrailerTask extends AsyncTask<String, Void, String> {
         @Override
         protected void onPreExecute() {
@@ -174,7 +184,8 @@ public class ActivityDetail extends AppCompatActivity implements AdapterTrailer.
                 mTrailerList.setAdapter(mTrailerAdapter);
 
                 lblMovieTitle.setText(mDetailedMovieInfo.getMovieTitle());
-                lblMovieReleaseDate.setText("Release: " + mDetailedMovieInfo.getMovieReleaseDate().substring(0, 4));
+                //lblMovieReleaseDate.setText("Release: " + mDetailedMovieInfo.getMovieReleaseDate().substring(0, 4));
+                lblMovieReleaseDate.setText("Release: " + mDetailedMovieInfo.getMovieReleaseDate());
                 if (mDetailedMovieInfo.getIsMovieAdult() == 1) {
                     lblMovieAdultRating.setText("Adult Rating: Yes");
                 } else {

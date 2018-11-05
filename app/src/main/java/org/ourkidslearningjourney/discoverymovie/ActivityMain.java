@@ -30,6 +30,8 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
     private static final String TAG = ActivityMain.class.getSimpleName();
     public static final String SELECTED_MOVIE_DETAIL = "MOVIE_DETAIL";
 
+    private static int idItemClicked = 0;
+
     private AdapterMovie mMovieAdapter;
     private RecyclerView mMovieList;
     private ProgressBar mLoadingIndicator;
@@ -51,6 +53,9 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
         GridLayoutManager layoutManager = new GridLayoutManager(this, 2);
         mMovieList.setLayoutManager(layoutManager);
 
+        mMovieDB = MovieDatabase.getInstance(getApplicationContext());
+        setupViewModel();
+
         if (getNetworkStatus(this)) {
             String urlToLoad = UtilsNetwork.MOVIEAPI_POPULARREQUEST + UtilsNetwork.MOVIEDB_APIKEY;
 
@@ -62,8 +67,6 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
                     "No Network Connectivity!\nUnable to get Movie Information",
                     Toast.LENGTH_LONG).show();
         }
-
-        mMovieDB = MovieDatabase.getInstance(getApplicationContext());
     }
 
     @Override
@@ -76,7 +79,7 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         String urlToLoad = "";
-        int idItemClicked = item.getItemId();
+        idItemClicked = item.getItemId();
 
         if ((mLoadMovie.getStatus() != AsyncTask.Status.RUNNING) || (mLoadMovie.getStatus() != AsyncTask.Status.PENDING)) {
             switch (idItemClicked) {
@@ -91,7 +94,7 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
                     mLoadMovie.execute(urlToLoad);
                     return true;
                 case R.id.action_sort_favorite:
-                    setupViewModel();
+                    showFavoriteMovie();
                     return true;
             }
         }
@@ -119,6 +122,22 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
     }
 
 
+    private void showFavoriteMovie() {
+        if (mFavoriteMovieInfos.size() == 0) {
+            Toast.makeText(
+                    getApplicationContext(),
+                    "You have NOT added any FAVORITE yet",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            mMovieList.setHasFixedSize(true);
+            mMovieAdapter = new AdapterMovie(
+                    ActivityMain.this,
+                    mFavoriteMovieInfos.size(),
+                    mFavoriteMovieInfos);
+            mMovieList.setAdapter(mMovieAdapter);
+        }
+    }
+
     private void setupViewModel() {
         MovieViewModel viewModel = ViewModelProviders.of(this).get(MovieViewModel.class);
 
@@ -126,20 +145,10 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
             @Override
             public void onChanged(@Nullable List<MovieInfo> movieInfos) {
                 Log.d(TAG, "Updating list of tasks from LiveData in ViewModel");
-
                 mFavoriteMovieInfos = new ArrayList<MovieInfo>(movieInfos);
-                if (mFavoriteMovieInfos.size() == 0) {
-                    Toast.makeText(
-                            getApplicationContext(),
-                            "You have NOT added any FAVORITE yet",
-                            Toast.LENGTH_LONG).show();
-                } else {
-                    mMovieList.setHasFixedSize(true);
-                    mMovieAdapter = new AdapterMovie(
-                            ActivityMain.this,
-                            mFavoriteMovieInfos.size(),
-                            mFavoriteMovieInfos);
-                    mMovieList.setAdapter(mMovieAdapter);
+
+                if (idItemClicked == R.id.action_sort_favorite) {
+                    showFavoriteMovie();
                 }
             }
         });
