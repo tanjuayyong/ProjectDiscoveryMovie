@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.os.Parcelable;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -23,21 +24,24 @@ import org.json.JSONException;
 
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class ActivityMain extends AppCompatActivity implements AdapterMovie.MovieAdapterOnClickHandler {
     private static final String TAG = ActivityMain.class.getSimpleName();
+    private final String KEY_RECYCLER_STATE = "RECYCLER_STATE";
+
     public static final String SELECTED_MOVIE_DETAIL = "MOVIE_DETAIL";
 
     private static int idItemClicked = 0;
+    private static AdapterMovie mMovieAdapter;
+    private static FetchMovieTask mLoadMovie;
 
-    private AdapterMovie mMovieAdapter;
     private RecyclerView mMovieList;
+    private GridLayoutManager mLayoutManager;
+    private Parcelable mLayoutState;
     private ProgressBar mLoadingIndicator;
 
     private MovieDatabase mMovieDB;
-    private FetchMovieTask mLoadMovie;
     private ArrayList<MovieInfo> mMovieInfos;
 
     public static ArrayList<MovieInfo> mFavoriteMovieInfos;
@@ -50,22 +54,35 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
         mLoadingIndicator = (ProgressBar) findViewById(R.id.pb_loading_indicator);
         mMovieList = (RecyclerView) findViewById(R.id.rv_displaymovies);
 
-        GridLayoutManager layoutManager = new GridLayoutManager(this, 2);
-        mMovieList.setLayoutManager(layoutManager);
-
         mMovieDB = MovieDatabase.getInstance(getApplicationContext());
         setupViewModel();
 
-        if (getNetworkStatus(this)) {
-            String urlToLoad = UtilsNetwork.MOVIEAPI_POPULARREQUEST + UtilsNetwork.MOVIEDB_APIKEY;
+        if (savedInstanceState == null) {
+            if (getNetworkStatus(this)) {
+                String urlToLoad = UtilsNetwork.MOVIEAPI_POPULARREQUEST + UtilsNetwork.MOVIEDB_APIKEY;
 
-            mLoadMovie = new FetchMovieTask();
-            mLoadMovie.execute(urlToLoad);
-        } else {
-            Toast.makeText(
-                    this,
-                    "No Network Connectivity!\nUnable to get Movie Information",
-                    Toast.LENGTH_LONG).show();
+                mLoadMovie = new FetchMovieTask();
+                mLoadMovie.execute(urlToLoad);
+            } else {
+                Toast.makeText(
+                        this,
+                        "No Network Connectivity!\nUnable to get Movie Information",
+                        Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (mLayoutState != null) {
+            mLayoutManager = new GridLayoutManager(ActivityMain.this, 2);
+            mLayoutManager.onRestoreInstanceState(mLayoutState);
+
+            mMovieList.setLayoutManager(mLayoutManager);
+            mMovieList.setHasFixedSize(true);
+            mMovieList.setAdapter(mMovieAdapter);
         }
     }
 
@@ -109,6 +126,23 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
 
         intentToDest.putExtra(SELECTED_MOVIE_DETAIL, movieInfo);
         startActivity(intentToDest);
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+
+        mLayoutState = mLayoutManager.onSaveInstanceState();
+        state.putParcelable(KEY_RECYCLER_STATE, mLayoutState);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle state) {
+        super.onRestoreInstanceState(state);
+
+        if (state != null) {
+            mLayoutState = state.getParcelable(KEY_RECYCLER_STATE);
+        }
     }
 
     public static boolean getNetworkStatus(Context context) {
@@ -166,6 +200,9 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
         protected void onPostExecute(String s) {
             try {
                 mMovieInfos = UtilsJson.parseMovieJson(s);
+
+                mLayoutManager = new GridLayoutManager(ActivityMain.this, 2);
+                mMovieList.setLayoutManager(mLayoutManager);
 
                 mMovieList.setHasFixedSize(true);
                 mMovieAdapter = new AdapterMovie(
