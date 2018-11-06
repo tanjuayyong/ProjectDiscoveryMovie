@@ -182,6 +182,11 @@ public class ActivityMain extends AppCompatActivity implements AdapterMovie.Movi
                 mFavoriteMovieInfos = new ArrayList<MovieInfo>(movieInfos);
 
                 if (idItemClicked == R.id.action_sort_favorite) {
+                    if (mFavoriteMovieInfos.size() == 0) {
+                        String urlToLoad = UtilsNetwork.MOVIEAPI_POPULARREQUEST + UtilsNetwork.MOVIEDB_APIKEY;
+                        mLoadMovie = new FetchMovieTask();
+                        mLoadMovie.execute(urlToLoad);
+                    }
                     showFavoriteMovie();
                 }
             }
